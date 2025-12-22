@@ -15,6 +15,7 @@ from scipy.spatial.distance import cosine
 from keras.models import load_model
 import pickle
 from sklearn.preprocessing import Normalizer
+from generateDataset import generate_dataset # Import the function
 
 # Define normalize function and l2_normalizer
 def normalize(img):
@@ -59,25 +60,25 @@ class FaceRecognitionSystem:
     def load_models(self):
         # Load face encoder
         self.face_encoder = InceptionResNetV2()
-        self.face_encoder.load_weights("facenet_keras_weights.h5")
+        self.face_encoder.load_weights(os.path.join(os.path.dirname(__file__), "facenet_keras_weights.h5"))
         
         # Load face detector
         self.face_detector = mtcnn.MTCNN()
         
         # Load encoding dictionary
         try:
-            with open('encodings/encodings_optimized.pkl', 'rb') as f:
+            with open(os.path.join(os.path.dirname(__file__), 'encodings/encodings_optimized.pkl'), 'rb') as f:
                 self.encoding_dict = pickle.load(f)
         except FileNotFoundError:
-            with open('encodings/encodings.pkl', 'rb') as f:
+            with open(os.path.join(os.path.dirname(__file__), 'encodings/encodings.pkl'), 'rb') as f:
                 self.encoding_dict = pickle.load(f)
         
         # Load classifier
         try:
-            with open('classifier/classifier_optimized.pkl', 'rb') as f:
+            with open(os.path.join(os.path.dirname(__file__), 'classifier/classifier_optimized.pkl'), 'rb') as f:
                 self.classifier = pickle.load(f)
         except FileNotFoundError:
-            with open('classifier/classifier.pkl', 'rb') as f:
+            with open(os.path.join(os.path.dirname(__file__), 'classifier/classifier.pkl'), 'rb') as f:
                 self.classifier = pickle.load(f)
 
     def get_face(self, img, box):
@@ -143,10 +144,20 @@ class FaceRecognitionSystem:
         file_name = f"att_{current_date}.csv"
         
         try:
+            # Step 1: Ensure header exists
+            file_exists = os.path.exists(file_name)
+            if not file_exists or os.stat(file_name).st_size == 0: # Check if file is empty
+                with open(file_name, 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(["Name", "Date", "EntryTime", "ExitTime", "Status"])
+            
+            # Step 2: Read existing data (excluding header)
             existing_data = []
-            if os.path.exists(file_name):
-                with open(file_name, 'r') as f:
-                    existing_data = [line.strip().split(',') for line in f.readlines()]
+            with open(file_name, 'r', newline='') as f:
+                reader = csv.reader(f)
+                header = next(reader, None) # Consume header
+                for row in reader:
+                    existing_data.append(row)
             
             person_found = False
             for i, entry in enumerate(existing_data):
@@ -160,9 +171,10 @@ class FaceRecognitionSystem:
                 new_entry = [name, current_date, current_time, current_time, "Present"]
                 existing_data.append(new_entry)
             
+            # Step 3: Rewrite the entire file with updated data (header + data)
             with open(file_name, 'w', newline='') as f:
                 writer = csv.writer(f)
-                writer.writerow(["Name", "Date", "EntryTime", "ExitTime", "Status"])
+                writer.writerow(["Name", "Date", "EntryTime", "ExitTime", "Status"]) # Write header
                 writer.writerows(existing_data)
                 
             return True
@@ -216,7 +228,10 @@ class FaceRecognitionSystem:
             return img
         
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        results = self.face_detector.detect_faces(img_rgb)
+        try:
+            results = self.face_detector.detect_faces(img_rgb)
+        except ValueError:
+            results = []
         
         current_faces = set()
         
@@ -356,9 +371,32 @@ def open_img():
 
 # ==================Functions Buttons=====================
 def student_pannels():
-    """Open dataset folder for student management"""
-    import subprocess
-    subprocess.Popen(['python', 'generateDataset.py'], cwd=os.getcwd())
+    """Open a new window to get student name for dataset generation."""
+    def get_student_name_window():
+        name_window = Toplevel(root)
+        name_window.title("Enter Student Name")
+        name_window.geometry("300x150")
+        name_window.transient(root) # Make it appear on top of the main window
+        name_window.grab_set() # Disable interaction with the main window
+
+        Label(name_window, text="Enter Student Name:", font=("verdana", 12)).pack(pady=10)
+        name_entry = Entry(name_window, width=30, font=("verdana", 12))
+        name_entry.pack(pady=5)
+        name_entry.focus_set()
+
+        def on_submit():
+                    student_name = name_entry.get().strip()
+                    if student_name:
+                        messagebox.showinfo("Dataset Generation", f"Dataset generation started for {student_name}. Please look at the camera.", parent=name_window)
+                        name_window.destroy()
+                        generate_dataset(student_name)
+                    else:
+                        messagebox.showwarning("Input Error", "Student name cannot be empty.", parent=name_window)
+
+        Button(name_window, text="Submit", command=on_submit, font=("verdana", 10)).pack(pady=10)
+        name_window.protocol("WM_DELETE_WINDOW", lambda: name_window.destroy()) # Allow closing with X button
+
+    get_student_name_window()
 
 def train_pannels():
     """Train the optimized face recognition system"""
@@ -383,13 +421,13 @@ def attendance_pannel():
     
     try:
         # Use the quick attendance viewer for immediate results
-        subprocess.Popen(['python', 'quick_attendance.py'], cwd=os.getcwd())
+        subprocess.Popen(['python', os.path.join(os.path.dirname(__file__), 'quick_attendance.py')])
         print("Quick attendance viewer opened successfully!")
     except Exception as e:
         print(f"Error opening quick attendance viewer: {e}")
         # Fallback to simple viewer
         try:
-            subprocess.Popen(['python', 'attendance_viewer.py'], cwd=os.getcwd())
+            subprocess.Popen(['python', os.path.join(os.path.dirname(__file__), 'attendance_viewer.py')])
             print("Attendance viewer opened successfully!")
         except Exception as e2:
             print(f"Error opening attendance viewer: {e2}")
@@ -599,7 +637,7 @@ dev_b1_1 = Button(bg_img, command=developr, text="Developers", cursor="hand2", f
 dev_b1_1.place(x=pos3_x, y=row2_y + button_height + 10, width=button_width, height=text_height)
 
 # exit button 8
-exi_img_btn = Image.open(r"Images_GUI\exi.jpg")
+exi_img_btn = Image.open(os.path.join(os.path.dirname(__file__), r"Images_GUI\exi.jpg"))
 exi_img_btn = exi_img_btn.resize((button_width, button_height), Image.LANCZOS)  # Use Image.LANCZOS for resizing
 exi_img1 = ImageTk.PhotoImage(exi_img_btn)
 
