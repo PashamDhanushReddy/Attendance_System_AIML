@@ -2,7 +2,7 @@ import cv2
 import os
 import  numpy as np
 def generate_dataset(name):
-    path = 'Datasets/' + name
+    path = 'Dataset/' + name
     isExist = os.path.exists(path)
     if isExist:
         print("Name Already Taken")
@@ -33,7 +33,7 @@ def generate_dataset(name):
             face_r=cv2.resize(face_cropped(frame),(400,400))
             face_r=cv2.cvtColor(face_r,cv2.COLOR_BGR2GRAY)
 
-            fileNamePath='Datasets/'+name+'/'+name+"_"+str(img_id)+".jpg"
+            fileNamePath='Dataset/'+name+'/'+name+"_"+str(img_id)+".jpg"
             cv2.imwrite(fileNamePath,face_r)
             cv2.putText(face_r,str(img_id),(50,50),cv2.FONT_HERSHEY_COMPLEX,1,(0,255,0),2)
 
